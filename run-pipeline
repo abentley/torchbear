@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+from argparse import ArgumentParser
+import logging
+from runpy import run_path
+import sys
+
+from torchbear.event import Queue
+from torchbear.pipeline import (
+    DependentTarget as Target,
+    Pipeline,
+    )
+from torchbear.step import ShellStep
+
+def parse_args():
+    parser = ArgumentParser()
+    parser.add_argument('target', nargs='?', help='The target to run.')
+    return parser.parse_args()
+
+
+def find_target(target_id, pipeline):
+    if target_id is None:
+        return
+    for target in pipeline.targets:
+        if target.target_id == target_id:
+            return target
+    else:
+        raise LookupError('Could not find target {}'.format(target_id))
+
+
+def main():
+    args = parse_args()
+    logging.basicConfig(level=logging.WARNING)
+    logging.getLogger().setLevel(logging.DEBUG)
+    with Pipeline.build() as pipeline:
+        run_path('./torchbear.tb', init_globals={
+            'Target': Target,
+            'ShellStep': ShellStep,
+            })
+    try:
+        target = find_target(args.target, pipeline)
+    except LookupError as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
+    Queue().run_pipeline(pipeline, target)
+
+
+if __name__ == '__main__':
+    main()

@@ -20,7 +20,7 @@ class Pipeline:
         try:
             yield pipeline
         finally:
-            if pipeline.default_target is None:
+            if pipeline.default_target is None and len(pipeline.targets) > 0:
                 pipeline.default_target = pipeline.targets[-1]
 
     def __init__(self, targets, default_target):
@@ -94,7 +94,6 @@ class Target:
                 yield event
         except Exception:
             yield Event(self._failure_id)
-            raise
         else:
             yield Event(self._success_id)
 
@@ -108,9 +107,9 @@ class Target:
 class DependentTarget(Target):
     """A target that depends on one or more other targets."""
 
-    def __init__(self, target_id, steps, dependencies):
+    def __init__(self, target_id, steps, dependencies=None):
         super().__init__(target_id, steps)
-        self.dependencies = dependencies
+        self.dependencies = dependencies if dependencies is not None else []
         self.seen_ids = set()
 
     def subscribe(self, queue):

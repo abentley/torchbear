@@ -20,17 +20,21 @@ def pipeline2():
         with Target.build('Shelly') as s:
             ShellStep('echo foo')
             ShellStep('ls -l')
-        with DependentTarget.build('Nopy', [s]):
+        with DependentTarget.build('Nopy', {s}):
             ShellStep('echo steve')
     return pipeline
+
+
+def pipeline():
+    target = Target('target-id', [lambda: print('Hello world')])
+    return Pipeline.for_one_target(target)
 
 
 def main():
     logging.basicConfig(level=logging.WARNING)
     logging.getLogger().setLevel(logging.INFO)
-    target = Target('target-id', [lambda: print('Hello world')])
-    pipeline = Pipeline.for_one_target(target)
     run_pipeline(pipeline2())
+
 
 if __name__ == '__main__':
     main()
