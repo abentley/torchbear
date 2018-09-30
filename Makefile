@@ -6,3 +6,5 @@ test:
 
 lint:
 	flake8 torchbear
+
+.PHONY: run test lint

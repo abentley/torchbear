@@ -36,3 +36,10 @@ class Queue:
             for func in self._callbacks.get(event.event_id, []):
                 for func_event in func(event=event):
                     self.send_event(func_event)
+
+    def run_pipeline(self, pipeline, target=None):
+        pipeline.subscribe(self)
+        if target is None:
+            target = pipeline.default_target
+        target.trigger(self)
+        self.run()
