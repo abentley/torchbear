@@ -4,7 +4,10 @@ import logging
 from runpy import run_path
 import sys
 
-from torchbear.event import Queue
+from torchbear.event import (
+    Listener,
+    Queue,
+    )
 from torchbear.pipeline import (
     DependentTarget as Target,
     Pipeline,
@@ -41,7 +44,7 @@ def main():
     except LookupError as e:
         print(e, file=sys.stderr)
         sys.exit(1)
-    Queue().run_pipeline(pipeline, target)
+    Listener(Queue()).run_pipeline(pipeline, target)
 
 
 if __name__ == '__main__':

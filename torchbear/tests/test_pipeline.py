@@ -3,6 +3,7 @@ from unittest import TestCase
 
 from torchbear.event import (
     Event,
+    Listener,
     Queue,
     )
 from torchbear.pipeline import (
@@ -24,16 +25,17 @@ class TestDependentTarget(TestCase):
 
     def test_subscribe_none(self):
         target = DependentTarget('hello', [], [])
-        queue = Queue()
-        target.subscribe(queue)
+        listener = Listener(Queue())
+        target.subscribe(listener)
         self.assertEqual({target.start_id, target.failure_id},
-                         set(queue._callbacks))
+                         set(listener._callbacks))
 
     def test_subscribe_two(self):
         dependencies = [Target('first', []), Target('second', [])]
         target = DependentTarget('hello', [], dependencies)
         queue = Queue()
-        target.subscribe(queue)
+        listener = Listener(queue)
+        target.subscribe(listener)
         self.assertEqual({
             dependencies[0].success_id,
             dependencies[0].failure_id,
@@ -41,7 +43,7 @@ class TestDependentTarget(TestCase):
             dependencies[1].failure_id,
             target.failure_id,
             target.start_id,
-        }, set(queue._callbacks))
+        }, set(listener._callbacks))
 
     def test_start(self):
         output = StringIO()
@@ -90,6 +92,6 @@ class TestDependentTarget(TestCase):
 
         foo_target = DependentTarget('foo', [write_foo], [])
         bar_target = DependentTarget('bar', [write_bar], [foo_target])
-
-        Queue().run_pipeline(Pipeline([bar_target, foo_target], bar_target))
+        pipeline = Pipeline([bar_target, foo_target], bar_target)
+        Listener(Queue()).run_pipeline(pipeline)
         self.assertEqual('foobar', output.getvalue())

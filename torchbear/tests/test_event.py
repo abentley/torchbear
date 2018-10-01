@@ -1,7 +1,10 @@
 from io import StringIO
 from unittest import TestCase
 
-from torchbear.event import Queue
+from torchbear.event import (
+    Listener,
+    Queue,
+    )
 from torchbear.pipeline import (
     Pipeline,
     Target,
@@ -17,5 +20,5 @@ class TestQueue(TestCase):
             output.write('foo')
 
         target = Target('hello', [write_foo])
-        Queue().run_pipeline(Pipeline.for_one_target(target), target)
+        Listener(Queue()).run_pipeline(Pipeline.for_one_target(target), target)
         self.assertEqual('foo', output.getvalue())

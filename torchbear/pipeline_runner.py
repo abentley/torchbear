@@ -1,6 +1,7 @@
 import logging
 
 from .event import (
+    Listener,
     Queue,
     )
 from .pipeline import (
@@ -12,7 +13,7 @@ from .step import ShellStep
 
 
 def run_pipeline(pipeline, target=None):
-    Queue().run_pipeline(pipeline, target)
+    Listener(Queue()).run_pipeline(pipeline, target)
 
 
 def pipeline2():
