@@ -112,9 +112,13 @@ class DependentTarget(Target):
         self.dependencies = dependencies if dependencies is not None else []
         self.seen_ids = set()
 
+    def __repr__(self):
+        return '{}({})'.format(type(self).__name__, repr(self.target_id))
+
     def subscribe(self, queue):
         super().subscribe(queue)
         queue.add_callback(self.failure_id, self.start)
+        queue.add_callback(self.success_id, self.start)
         for dependency in self.dependencies:
             queue.add_callback(dependency.success_id, self.start)
             queue.add_callback(dependency.failure_id, self.start)
@@ -129,9 +133,11 @@ class DependentTarget(Target):
 
         Also, don't start at all if self.start_id hasn't been seen.
         """
+        self.seen_ids.add(event.event_id)
         if self.failure_id in self.seen_ids:
             return
-        self.seen_ids.add(event.event_id)
+        if self.success_id in self.seen_ids:
+            return
         if self.start_id not in self.seen_ids:
             return
         for dependency in self.dependencies:
@@ -142,4 +148,5 @@ class DependentTarget(Target):
         for dependency in self.dependencies:
             if dependency.success_id not in self.seen_ids:
                 return
-        yield from super().start(event)
+        for event in super().start(event):
+            yield event

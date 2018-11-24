@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from io import StringIO
 from unittest import TestCase
 
@@ -27,8 +28,8 @@ class TestDependentTarget(TestCase):
         target = DependentTarget('hello', [], [])
         listener = Listener(Queue())
         target.subscribe(listener)
-        self.assertEqual({target.start_id, target.failure_id},
-                         set(listener._callbacks))
+        self.assertEqual({target.start_id, target.failure_id,
+                          target.success_id}, set(listener._callbacks))
 
     def test_subscribe_two(self):
         dependencies = [Target('first', []), Target('second', [])]
@@ -42,6 +43,7 @@ class TestDependentTarget(TestCase):
             dependencies[1].success_id,
             dependencies[1].failure_id,
             target.failure_id,
+            target.success_id,
             target.start_id,
         }, set(listener._callbacks))
 
@@ -80,6 +82,28 @@ class TestDependentTarget(TestCase):
         self.assertEqual(events, [])
         (event,) = list(target.start(Event(target.start_id)))
         self.assertEqual(('hello', 'failure'), event.event_id)
+
+    @contextmanager
+    def no_run_test(self):
+        output = []
+
+        def add_output():
+            output.append('hello')
+
+        target = DependentTarget('foo', [add_output], [])
+        list(target.start(Event(target.start_id)))
+        self.assertEqual(['hello'], output)
+        yield target
+        list(target.start(Event(target.start_id)))
+        self.assertEqual(['hello'], output)
+
+    def test_no_run_after_failure(self):
+        with self.no_run_test() as target:
+            list(target.start(Event(target.failure_id)))
+
+    def test_no_run_after_success(self):
+        with self.no_run_test() as target:
+            list(target.start(Event(target.success_id)))
 
     def test_run(self):
         output = StringIO()
