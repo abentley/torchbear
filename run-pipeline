@@ -9,10 +9,11 @@ from torchbear.event import (
     Queue,
     )
 from torchbear.pipeline import (
-    DependentTarget as Target,
+    CoRoutineTarget as Target,
     Pipeline,
     )
 from torchbear.step import ShellStep
+
 
 def parse_args():
     parser = ArgumentParser()

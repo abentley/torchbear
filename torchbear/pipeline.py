@@ -104,21 +104,17 @@ class Target:
             func()
 
 
-class DependentTarget(Target):
-    """A target that depends on one or more other targets."""
+class BaseDependentTarget(Target):
 
     def __init__(self, target_id, steps, dependencies=None):
         super().__init__(target_id, steps)
         self.dependencies = dependencies if dependencies is not None else []
-        self.seen_ids = set()
 
     def __repr__(self):
         return '{}({})'.format(type(self).__name__, repr(self.target_id))
 
     def subscribe(self, queue):
         super().subscribe(queue)
-        queue.add_callback(self.failure_id, self.start)
-        queue.add_callback(self.success_id, self.start)
         for dependency in self.dependencies:
             queue.add_callback(dependency.success_id, self.start)
             queue.add_callback(dependency.failure_id, self.start)
@@ -127,6 +123,19 @@ class DependentTarget(Target):
         super().trigger(queue)
         for dependency in self.dependencies:
             dependency.trigger(queue)
+
+
+class DependentTarget(BaseDependentTarget):
+    """A target that depends on one or more other targets."""
+
+    def __init__(self, target_id, steps, dependencies=None):
+        super().__init__(target_id, steps, dependencies)
+        self.seen_ids = set()
+
+    def subscribe(self, queue):
+        super().subscribe(queue)
+        queue.add_callback(self.failure_id, self.start)
+        queue.add_callback(self.success_id, self.start)
 
     def start(self, event):
         """Start once all dependencies are satisfied.
@@ -150,3 +159,42 @@ class DependentTarget(Target):
                 return
         for event in super().start(event):
             yield event
+
+
+class CoRoutineTarget(BaseDependentTarget):
+    """A dependent target implemented as a co-routine."""
+
+    def __init__(self, target_id, steps, dependencies=None):
+        super().__init__(target_id, steps, dependencies)
+        self.coroutine = self._process()
+        next(self.coroutine)
+
+    def start(self, event):
+        try:
+            event = self.coroutine.send(event)
+            if event is None:
+                return
+            yield event
+            for event in self.coroutine:
+                if event is None:
+                    break
+                yield event
+        except StopIteration:
+            return
+
+    def _process(self):
+        seen_ids = set()
+        dep_failures = {d.failure_id for d in self.dependencies}
+        start_requirements = {d.success_id for d in self.dependencies}
+        start_requirements.add(self.start_id)
+        while True:
+            event = yield
+            seen_ids.add(event.event_id)
+            if seen_ids.intersection(dep_failures) != set():
+                fail_event = Event(self.failure_id)
+                # Ignore new events because we're about to return
+                yield fail_event
+                return
+            if seen_ids.issuperset(start_requirements):
+                break
+        yield from super().start(event)
