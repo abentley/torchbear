@@ -15,9 +15,19 @@ from torchbear.pipeline import (
 from torchbear.step import ShellStep
 
 
+def get_logging_level(verbose_count):
+    verbose_count += 2
+    levels = (logging.CRITICAL, logging.ERROR, logging.WARNING, logging.INFO,
+              logging.DEBUG)
+    verbose_count = min(verbose_count, len(levels) - 1)
+    return levels[verbose_count]
+
+
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument('target', nargs='?', help='The target to run.')
+    parser.add_argument('-v', '--verbose', action='count',
+                        default=0, dest='verbosity')
     return parser.parse_args()
 
 
@@ -34,7 +44,9 @@ def find_target(target_id, pipeline):
 def main():
     args = parse_args()
     logging.basicConfig(level=logging.WARNING)
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging_level = get_logging_level(args.verbosity)
+    logging.getLogger().setLevel(logging_level)
+    logging.info('hello')
     with Pipeline.build() as pipeline:
         run_path('./torchbear.tb', init_globals={
             'Target': Target,
