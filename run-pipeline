@@ -9,7 +9,7 @@ from torchbear.event import (
     Queue,
     )
 from torchbear.pipeline import (
-    CoRoutineTarget as Target,
+    DependentTarget as Target,
     Pipeline,
     )
 from torchbear.step import ShellStep
@@ -46,7 +46,6 @@ def main():
     logging.basicConfig(level=logging.WARNING)
     logging_level = get_logging_level(args.verbosity)
     logging.getLogger().setLevel(logging_level)
-    logging.info('hello')
     with Pipeline.build() as pipeline:
         run_path('./torchbear.tb', init_globals={
             'Target': Target,
