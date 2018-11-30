@@ -4,7 +4,6 @@ from unittest import TestCase
 
 from torchbear.event import (
     Event,
-    ItemEvent,
     Listener,
     Queue,
     )
@@ -59,9 +58,9 @@ class TestDependentTarget(TestCase):
         target = DependentTarget('hello', [write_foo], dependencies)
         events = list(target.start(Event(target.start_id)))
         self.assertEqual(events, [])
-        events = list(target.start(ItemEvent(*dependencies[0].success_item)))
+        events = list(target.start(dependencies[0].make_succeeded_event()))
         self.assertEqual(events, [])
-        events = list(target.start(ItemEvent(*dependencies[1].success_item)))
+        events = list(target.start(dependencies[1].make_succeeded_event()))
         self.assertNotEqual(events, [])
 
     def test_start_failure(self):
@@ -69,18 +68,18 @@ class TestDependentTarget(TestCase):
         target = DependentTarget('hello', [], dependencies)
         events = list(target.start(Event(target.start_id)))
         self.assertEqual(events, [])
-        (event,) = list(target.start(ItemEvent(*dependencies[0].failure_item)))
+        (event,) = list(target.start(dependencies[0].make_failed_event()))
         self.assertEqual((('hello', 'status'), Status.FAILED), event.item)
-        events = list(target.start(ItemEvent(*dependencies[1].success_item)))
+        events = list(target.start(dependencies[1].make_succeeded_event()))
         self.assertEqual(events, [])
 
     def test_start_after_failure(self):
         # Don't even report as failed unless we've tried to start it.
         dependencies = [Target('first', []), Target('second', [])]
         target = DependentTarget('hello', [], dependencies)
-        events = list(target.start(ItemEvent(*dependencies[0].failure_item)))
+        events = list(target.start(dependencies[0].make_failed_event()))
         self.assertEqual(events, [])
-        events = list(target.start(ItemEvent(*dependencies[1].success_item)))
+        events = list(target.start(dependencies[1].make_succeeded_event()))
         self.assertEqual(events, [])
         (event,) = list(target.start(Event(target.start_id)))
         self.assertEqual((('hello', 'status'), Status.FAILED), event.item)
@@ -101,11 +100,11 @@ class TestDependentTarget(TestCase):
 
     def test_no_run_after_failure(self):
         with self.no_run_test() as target:
-            list(target.start(ItemEvent(*target.failure_item)))
+            list(target.start(target.make_failed_event()))
 
     def test_no_run_after_success(self):
         with self.no_run_test() as target:
-            list(target.start(ItemEvent(*target.success_item)))
+            list(target.start(target.make_succeeded_event()))
 
     def test_run(self):
         output = StringIO()
