@@ -131,11 +131,14 @@ class Target:
             func()
 
 
-class BaseDependentTarget(Target):
+class DependentTarget(Target):
+    """A target that depends on one or more other targets."""
 
     def __init__(self, target_id, steps, dependencies=None):
         super().__init__(target_id, steps)
         self.dependencies = dependencies if dependencies is not None else []
+        self.seen = {}
+        self.seen_items = self.seen.items()
 
     def __repr__(self):
         return '{}({})'.format(type(self).__name__, repr(self.target_id))
@@ -144,24 +147,12 @@ class BaseDependentTarget(Target):
         super().subscribe(queue)
         for dependency in self.dependencies:
             queue.add_callback(dependency.status_id, self.start)
+        queue.add_callback(self.status_id, self.start)
 
     def trigger(self, queue):
         super().trigger(queue)
         for dependency in self.dependencies:
             dependency.trigger(queue)
-
-
-class DependentTarget(BaseDependentTarget):
-    """A target that depends on one or more other targets."""
-
-    def __init__(self, target_id, steps, dependencies=None):
-        super().__init__(target_id, steps, dependencies)
-        self.seen = {}
-        self.seen_items = self.seen.items()
-
-    def subscribe(self, queue):
-        super().subscribe(queue)
-        queue.add_callback(self.status_id, self.start)
 
     def start(self, event):
         """Start once all dependencies are satisfied.
