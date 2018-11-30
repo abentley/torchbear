@@ -1,6 +1,21 @@
 from contextlib import contextmanager
+from enum import Enum
 
-from .event import Event
+from .event import (
+    Event,
+    ItemEvent,
+    )
+
+
+class Status(Enum):
+
+    PENDING = 'pending'
+
+    RUNNING = 'running'
+
+    FAILED = 'failed'
+
+    SUCCEEDED = 'succeeded'
 
 
 class Pipeline:
@@ -59,9 +74,7 @@ class Target:
     def __init__(self, target_id, steps):
         self._target_id = target_id
         self._start_id = (target_id, 'start')
-        self._running_id = (target_id, 'running')
-        self._failure_id = (target_id, 'failure')
-        self._success_id = (target_id, 'success')
+        self._status_id = (target_id, 'status')
         self.steps = steps
         if len(Pipeline.pending_pipeline) > 0:
             Pipeline.pending_pipeline[-1].targets.append(self)
@@ -71,16 +84,24 @@ class Target:
         return self._target_id
 
     @property
+    def status_id(self):
+        return self._status_id
+
+    @property
     def start_id(self):
         return self._start_id
 
     @property
-    def success_id(self):
-        return self._success_id
+    def start_item(self):
+        return (self._start_id, None)
 
     @property
-    def failure_id(self):
-        return self._failure_id
+    def success_item(self):
+        return (self._status_id, Status.SUCCEEDED)
+
+    @property
+    def failure_item(self):
+        return (self._status_id, Status.FAILED)
 
     def subscribe(self, queue):
         queue.add_callback(self._start_id, self.start)
@@ -93,9 +114,9 @@ class Target:
             for event in self.run_steps():
                 yield event
         except Exception:
-            yield Event(self._failure_id)
+            yield ItemEvent(*self.failure_item)
         else:
-            yield Event(self._success_id)
+            yield ItemEvent(*self.success_item)
 
     def run_steps(self):
         for index, step in enumerate(self.steps):
@@ -116,8 +137,7 @@ class BaseDependentTarget(Target):
     def subscribe(self, queue):
         super().subscribe(queue)
         for dependency in self.dependencies:
-            queue.add_callback(dependency.success_id, self.start)
-            queue.add_callback(dependency.failure_id, self.start)
+            queue.add_callback(dependency.status_id, self.start)
 
     def trigger(self, queue):
         super().trigger(queue)
@@ -130,32 +150,32 @@ class DependentTarget(BaseDependentTarget):
 
     def __init__(self, target_id, steps, dependencies=None):
         super().__init__(target_id, steps, dependencies)
-        self.seen_ids = set()
+        self.seen = {}
+        self.seen_items = self.seen.items()
 
     def subscribe(self, queue):
         super().subscribe(queue)
-        queue.add_callback(self.failure_id, self.start)
-        queue.add_callback(self.success_id, self.start)
+        queue.add_callback(self.status_id, self.start)
 
     def start(self, event):
         """Start once all dependencies are satisfied.
 
         Also, don't start at all if self.start_id hasn't been seen.
         """
-        self.seen_ids.add(event.event_id)
-        if self.failure_id in self.seen_ids:
+        self.seen.update([event.item])
+        if self.failure_item in self.seen_items:
             return
-        if self.success_id in self.seen_ids:
+        if self.success_item in self.seen_items:
             return
-        if self.start_id not in self.seen_ids:
+        if self.start_item not in self.seen_items:
             return
         for dependency in self.dependencies:
-            if dependency.failure_id in self.seen_ids:
-                new_event = Event(self.failure_id)
-                self.seen_ids.add(new_event.event_id)
+            if dependency.failure_item in self.seen_items:
+                new_event = ItemEvent(*self.failure_item)
+                self.seen.update([new_event.item])
                 yield new_event
         for dependency in self.dependencies:
-            if dependency.success_id not in self.seen_ids:
+            if dependency.success_item not in self.seen_items:
                 return
         for event in super().start(event):
             yield event

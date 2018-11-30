@@ -7,8 +7,29 @@ class Event:
     def __init__(self, event_id):
         self.event_id = event_id
 
+    @property
+    def item(self):
+        return (self.event_id, None)
+
     def __repr__(self):
         return '{}({})'.format(self.__class__.__name__, repr(self.event_id))
+
+
+class ItemEvent(Event):
+    """Represent an event."""
+
+    def __init__(self, event_id, value):
+        super().__init__(event_id)
+        self.value = value
+        self.event_id = event_id
+
+    @property
+    def item(self):
+        return (self.event_id, self.value)
+
+    def __repr__(self):
+        return '{}({}={})'.format(
+            self.__class__.__name__, repr(self.event_id), repr(self.value))
 
 
 class Queue:

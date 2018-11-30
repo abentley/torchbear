@@ -4,6 +4,7 @@ from unittest import TestCase
 
 from torchbear.event import (
     Event,
+    ItemEvent,
     Listener,
     Queue,
     )
@@ -11,6 +12,7 @@ from torchbear.pipeline import (
     DependentTarget,
     Pipeline,
     Target,
+    Status,
     )
 
 
@@ -28,8 +30,9 @@ class TestDependentTarget(TestCase):
         target = DependentTarget('hello', [], [])
         listener = Listener(Queue())
         target.subscribe(listener)
-        self.assertEqual({target.start_id, target.failure_id,
-                          target.success_id}, set(listener._callbacks))
+        self.assertEqual({
+            target.start_id, target.status_id,
+            }, set(listener._callbacks))
 
     def test_subscribe_two(self):
         dependencies = [Target('first', []), Target('second', [])]
@@ -37,15 +40,14 @@ class TestDependentTarget(TestCase):
         queue = Queue()
         listener = Listener(queue)
         target.subscribe(listener)
-        self.assertEqual({
-            dependencies[0].success_id,
-            dependencies[0].failure_id,
-            dependencies[1].success_id,
-            dependencies[1].failure_id,
-            target.failure_id,
-            target.success_id,
+        expected = {
+            dependencies[0].status_id,
+            dependencies[1].status_id,
             target.start_id,
-        }, set(listener._callbacks))
+            target.status_id,
+        }
+        actual = set(listener._callbacks)
+        self.assertEqual(expected, actual)
 
     def test_start(self):
         output = StringIO()
@@ -57,9 +59,9 @@ class TestDependentTarget(TestCase):
         target = DependentTarget('hello', [write_foo], dependencies)
         events = list(target.start(Event(target.start_id)))
         self.assertEqual(events, [])
-        events = list(target.start(Event(dependencies[0].success_id)))
+        events = list(target.start(ItemEvent(*dependencies[0].success_item)))
         self.assertEqual(events, [])
-        events = list(target.start(Event(dependencies[1].success_id)))
+        events = list(target.start(ItemEvent(*dependencies[1].success_item)))
         self.assertNotEqual(events, [])
 
     def test_start_failure(self):
@@ -67,21 +69,21 @@ class TestDependentTarget(TestCase):
         target = DependentTarget('hello', [], dependencies)
         events = list(target.start(Event(target.start_id)))
         self.assertEqual(events, [])
-        (event,) = list(target.start(Event(dependencies[0].failure_id)))
-        self.assertEqual(('hello', 'failure'), event.event_id)
-        events = list(target.start(Event(dependencies[1].success_id)))
+        (event,) = list(target.start(ItemEvent(*dependencies[0].failure_item)))
+        self.assertEqual((('hello', 'status'), Status.FAILED), event.item)
+        events = list(target.start(ItemEvent(*dependencies[1].success_item)))
         self.assertEqual(events, [])
 
     def test_start_after_failure(self):
         # Don't even report as failed unless we've tried to start it.
         dependencies = [Target('first', []), Target('second', [])]
         target = DependentTarget('hello', [], dependencies)
-        events = list(target.start(Event(dependencies[0].failure_id)))
+        events = list(target.start(ItemEvent(*dependencies[0].failure_item)))
         self.assertEqual(events, [])
-        events = list(target.start(Event(dependencies[1].success_id)))
+        events = list(target.start(ItemEvent(*dependencies[1].success_item)))
         self.assertEqual(events, [])
         (event,) = list(target.start(Event(target.start_id)))
-        self.assertEqual(('hello', 'failure'), event.event_id)
+        self.assertEqual((('hello', 'status'), Status.FAILED), event.item)
 
     @contextmanager
     def no_run_test(self):
@@ -99,11 +101,11 @@ class TestDependentTarget(TestCase):
 
     def test_no_run_after_failure(self):
         with self.no_run_test() as target:
-            list(target.start(Event(target.failure_id)))
+            list(target.start(ItemEvent(*target.failure_item)))
 
     def test_no_run_after_success(self):
         with self.no_run_test() as target:
-            list(target.start(Event(target.success_id)))
+            list(target.start(ItemEvent(*target.success_item)))
 
     def test_run(self):
         output = StringIO()
