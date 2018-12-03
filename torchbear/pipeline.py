@@ -1,21 +1,11 @@
 from contextlib import contextmanager
-from enum import Enum
 
 from .event import (
     Event,
+    EventQueue,
     ItemEvent,
+    Status,
     )
-
-
-class Status(Enum):
-
-    PENDING = 'pending'
-
-    RUNNING = 'running'
-
-    FAILED = 'failed'
-
-    SUCCEEDED = 'succeeded'
 
 
 class Pipeline:
@@ -53,8 +43,10 @@ class Pipeline:
         return cls([target], target)
 
     def subscribe(self, queue):
+        handlers = []
         for target in self.targets:
-            target.subscribe(queue)
+            handlers.append(target.subscribe(queue))
+        return handlers
 
 
 class Target:
@@ -63,21 +55,22 @@ class Target:
 
     @classmethod
     @contextmanager
-    def build(cls, target_id, *args, **kwargs):
+    def build(cls, loop, target_id, *args, **kwargs):
         """While this context is active, any new Step is auto-appended."""
-        Target.pending_target.append(cls(target_id, [], *args, **kwargs))
+        Target.pending_target.append(cls(loop, target_id, [], *args, **kwargs))
         try:
             yield Target.pending_target[-1]
         finally:
             Target.pending_target.pop()
 
-    def __init__(self, target_id, steps):
+    def __init__(self, loop, target_id, steps):
         self._target_id = target_id
         self._start_id = (target_id, 'start')
         self._status_id = (target_id, 'status')
         self.steps = steps
         if len(Pipeline.pending_pipeline) > 0:
             Pipeline.pending_pipeline[-1].targets.append(self)
+        self.event_queue = EventQueue(loop)
 
     @property
     def target_id(self):
@@ -109,13 +102,14 @@ class Target:
     def make_failed_event(self):
         return ItemEvent(*self.failed_item)
 
-    def subscribe(self, queue):
-        queue.add_callback(self._start_id, self.start)
+    def subscribe(self, listener):
+        listener.add_subscription(self._start_id, self.event_queue)
+        return self.handle_events(listener.event_queue)
 
-    def trigger(self, queue):
-        queue.send_event(Event(self._start_id))
+    def trigger(self, event_queue):
+        event_queue.send_events([Event(self._start_id)])
 
-    def start(self, event):
+    async def start(self, event):
         try:
             for event in self.run_steps():
                 yield event
@@ -123,6 +117,12 @@ class Target:
             yield self.make_failed_event()
         else:
             yield self.make_succeeded_event()
+
+    async def handle_events(self, queue):
+        async for in_event in self.event_queue.iter_events():
+            async for out_event in self.start(in_event):
+                if not queue.done:
+                    queue.send_events([out_event])
 
     def run_steps(self):
         for index, step in enumerate(self.steps):
@@ -134,8 +134,8 @@ class Target:
 class DependentTarget(Target):
     """A target that depends on one or more other targets."""
 
-    def __init__(self, target_id, steps, dependencies=None):
-        super().__init__(target_id, steps)
+    def __init__(self, loop, target_id, steps, dependencies=None):
+        super().__init__(loop, target_id, steps)
         self.dependencies = dependencies if dependencies is not None else []
         self.seen = {}
         self.seen_items = self.seen.items()
@@ -143,18 +143,19 @@ class DependentTarget(Target):
     def __repr__(self):
         return '{}({})'.format(type(self).__name__, repr(self.target_id))
 
-    def subscribe(self, queue):
-        super().subscribe(queue)
+    def subscribe(self, listener):
+        handler = super().subscribe(listener)
         for dependency in self.dependencies:
-            queue.add_callback(dependency.status_id, self.start)
-        queue.add_callback(self.status_id, self.start)
+            listener.add_subscription(dependency.status_id, self.event_queue)
+        listener.add_subscription(self.status_id, self.event_queue)
+        return handler
 
-    def trigger(self, queue):
-        super().trigger(queue)
+    def trigger(self, event_queue):
+        super().trigger(event_queue)
         for dependency in self.dependencies:
-            dependency.trigger(queue)
+            dependency.trigger(event_queue)
 
-    def start(self, event):
+    async def start(self, event):
         """Start once all dependencies are satisfied.
 
         Also, don't start at all if self.start_id hasn't been seen.
@@ -174,5 +175,5 @@ class DependentTarget(Target):
         for dependency in self.dependencies:
             if dependency.succeeded_item not in self.seen_items:
                 return
-        for event in super().start(event):
+        async for event in super().start(event):
             yield event

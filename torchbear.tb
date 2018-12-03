@@ -1,8 +1,8 @@
-with Target.build('run'):
+with Target.build(loop, 'run'):
     ShellStep('python3 -m torchbear.pipeline_runner')
 
-with Target.build('test'):
+with Target.build(loop, 'test'):
     ShellStep('python3 -m unittest discover torchbear')
 
-with Target.build('lint'):
+with Target.build(loop, 'lint'):
     ShellStep('flake8 torchbear run-pipeline')

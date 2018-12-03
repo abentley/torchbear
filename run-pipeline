@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser
+import asyncio
 import logging
-from runpy import run_path
 import sys
 
-from torchbear.event import (
-    Listener,
-    Queue,
+from torchbear.pipeline_runner import (
+    load_pipeline,
+    run_pipeline,
     )
-from torchbear.pipeline import (
-    DependentTarget as Target,
-    Pipeline,
-    )
-from torchbear.step import ShellStep
 
 
 def get_logging_level(verbose_count):
@@ -46,17 +41,14 @@ def main():
     logging.basicConfig(level=logging.WARNING)
     logging_level = get_logging_level(args.verbosity)
     logging.getLogger().setLevel(logging_level)
-    with Pipeline.build() as pipeline:
-        run_path('./torchbear.tb', init_globals={
-            'Target': Target,
-            'ShellStep': ShellStep,
-            })
+    loop = asyncio.get_event_loop()
+    pipeline = load_pipeline(loop)
     try:
         target = find_target(args.target, pipeline)
     except LookupError as e:
         print(e, file=sys.stderr)
         sys.exit(1)
-    Listener(Queue()).run_pipeline(pipeline, target)
+    run_pipeline(loop, pipeline, target)
 
 
 if __name__ == '__main__':
