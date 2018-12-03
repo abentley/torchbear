@@ -1,14 +1,16 @@
+import asyncio
 from io import StringIO
 from unittest import TestCase
 
 from torchbear.event import (
-    Listener,
-    Queue,
+    EventRouter,
+    EventQueue,
     )
 from torchbear.pipeline import (
     Pipeline,
     Target,
     )
+from torchbear.pipeline_runner import run_pipeline
 
 
 class TestQueue(TestCase):
@@ -18,7 +20,7 @@ class TestQueue(TestCase):
 
         def write_foo():
             output.write('foo')
-
-        target = Target('hello', [write_foo])
-        Listener(Queue()).run_pipeline(Pipeline.for_one_target(target), target)
+        loop = asyncio.get_event_loop()
+        target = Target(loop, 'hello', [write_foo])
+        run_pipeline(loop, Pipeline.for_one_target(target))
         self.assertEqual('foo', output.getvalue())

@@ -34,20 +34,19 @@ class Event:
 
 
 class ItemEvent(Event):
-    """Represent an event."""
+    """Represent an event with a value (like a dict item)."""
 
     def __init__(self, event_id, value):
         super().__init__(event_id)
         self.value = value
-        self.event_id = event_id
 
     @property
     def item(self):
         return (self.event_id, self.value)
 
     def __repr__(self):
-        return '{}({}={})'.format(
-            self.__class__.__name__, repr(self.event_id), repr(self.value))
+        return '{}({} = {})'.format(
+            self.__class__.__name__, repr(self.event_id), str(self.value))
 
 
 class EventQueue:
@@ -92,15 +91,18 @@ class EventQueue:
 
 
 class EventRouter:
+    """Allow EventQueues to be subscribed to events by id."""
 
     def __init__(self, event_queue):
         self.event_queue = event_queue
         self._subscription = {}
 
     def add_subscription(self, event_id, queue):
+        """Subscribe an event queue to an event id."""
         self._subscription.setdefault(event_id, []).append(queue)
 
     async def route_events(self, target):
+        """Route events from self.event_queue to their subscribers."""
         with closing(self):
             async for event in self.event_queue.iter_events():
                 logging.debug(f'Event: {event!r}')
@@ -111,12 +113,18 @@ class EventRouter:
                     event_queue.send_events([event])
 
     def close(self):
+        """Close this EventRouter by closing all its queues."""
         for event_queues in self._subscription.values():
             for event_queue in event_queues:
                 event_queue.close()
         self.event_queue.close()
 
     async def run_pipeline(self, pipeline, target=None):
+        """Run a pipeline.
+
+        The supplied target will be run to completion (success or failure.)
+        If no target is supplied, the pipeline's default will be used.
+        """
         handlers = pipeline.subscribe(self)
         if target is None:
             target = pipeline.default_target

@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+import logging
 
 from .event import (
     Event,
@@ -110,19 +111,22 @@ class Target:
         event_queue.send_events([Event(self._start_id)])
 
     async def start(self, event):
+        logging.info(f'[{self._target_id}] Starting')
         try:
             for event in self.run_steps():
                 yield event
         except Exception:
+            logging.info(f'[{self._target_id}] Failed')
             yield self.make_failed_event()
         else:
+            logging.info(f'[{self._target_id}] Succeeded')
             yield self.make_succeeded_event()
 
-    async def handle_events(self, queue):
+    async def handle_events(self, out_queue):
         async for in_event in self.event_queue.iter_events():
             async for out_event in self.start(in_event):
-                if not queue.done:
-                    queue.send_events([out_event])
+                if not out_queue.done:
+                    out_queue.send_events([out_event])
 
     def run_steps(self):
         for index, step in enumerate(self.steps):
