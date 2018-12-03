@@ -2,6 +2,7 @@ import asyncio
 from collections import deque
 from contextlib import closing
 from enum import Enum
+import logging
 
 
 class Status(Enum):
@@ -102,6 +103,7 @@ class EventRouter:
     async def route_events(self, target):
         with closing(self):
             async for event in self.event_queue.iter_events():
+                logging.debug(f'Event: {event!r}')
                 if event.event_id == target.status_id:
                     if event.value in COMPLETED_STATUS:
                         break

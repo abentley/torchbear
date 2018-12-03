@@ -102,9 +102,9 @@ class Target:
     def make_failed_event(self):
         return ItemEvent(*self.failed_item)
 
-    def subscribe(self, listener):
-        listener.add_subscription(self._start_id, self.event_queue)
-        return self.handle_events(listener.event_queue)
+    def subscribe(self, event_router):
+        event_router.add_subscription(self._start_id, self.event_queue)
+        return self.handle_events(event_router.event_queue)
 
     def trigger(self, event_queue):
         event_queue.send_events([Event(self._start_id)])
@@ -143,11 +143,12 @@ class DependentTarget(Target):
     def __repr__(self):
         return '{}({})'.format(type(self).__name__, repr(self.target_id))
 
-    def subscribe(self, listener):
-        handler = super().subscribe(listener)
+    def subscribe(self, event_router):
+        handler = super().subscribe(event_router)
         for dependency in self.dependencies:
-            listener.add_subscription(dependency.status_id, self.event_queue)
-        listener.add_subscription(self.status_id, self.event_queue)
+            event_router.add_subscription(dependency.status_id,
+                                          self.event_queue)
+        event_router.add_subscription(self.status_id, self.event_queue)
         return handler
 
     def trigger(self, event_queue):
